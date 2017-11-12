@@ -27,37 +27,26 @@ for index,row in df.iterrows():
         trans[row['source']] = {}
     if row['target'] not in trans[row['source']]:
         trans[row['source']][row['target']] = []
-
     if row['source'] not in pairS.keys():
         pairS[row['source']] = []
     if row['target'] not in pairT.keys():
         pairT[row['target']] = []
 
+    if  row['target'] not in pairS[row['source']]:
+        pairS[row['source']].append(row['target'])
 
-    if row['source'] not in counts:
-        counts[row['source']] = [0,0]
-        pairS[row['source']] = [row['target']]
-    else:
-        if  row['target'] not in pairS[row['source']]:
-            pairS[row['source']].append(row['target'])
-            counts[row['source']][1] += 1 # outgoing
-
-    if row['target'] not in counts:
-        counts[row['target']] = [0,0]
-        pairT[row['target']] = [row['source']]
-    else:
-        if  row['source'] not in pairT[row['target']]:
-            pairT[row['target']].append(row['source'])
-            counts[row['target']][0] += 1 # incoming
+    if  row['source'] not in pairT[row['target']]:
+        pairT[row['target']].append(row['source'])
 
     trans[row['source']][row['target']].append((row['id'],row['datetime'],row['amount'],row['currency']))
     visited[row['id']] = False
 
 
 print("Possible human trafficing frauders:")
-for c in counts.keys():
-    if counts[c][1] == 1 and counts[c][0] > 10:
-        print(c)
+for t in pairT.keys():
+    if len(pairT[t]) > 6:
+        if t in pairS.keys() and len(pairS[t]) == 1:
+            print(t)
 
 print('Finished preprocess')
 def DFS(key,parent,date,amount,source,flag,depth,parent_amount):
@@ -109,7 +98,7 @@ ind = 0
 for v in visited.keys():
     visited[v] = False
 
-print("bakayim outputa")
+print("Possible flow pattern frauds:")
 for key in trans:
     depth = 0
     t = list(trans[key].keys())[0]
@@ -122,7 +111,7 @@ for key in trans:
 
 
 # DFS_decreasing_diff_start_end(key,datetime.min, 999999,d, tt[0])
-
+print("Possible time pattern frauds:")
 for i in trans:
     for k in trans[i]:
        trans[i][k].sort(key=lambda tup: tup[1])
