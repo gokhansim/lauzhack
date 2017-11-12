@@ -1,5 +1,7 @@
 import pandas as pd
-from datetime import date, time, datetime
+from datetime import date, datetime
+import time
+from datetime import datetime
 
 df1 = pd.read_csv("transactions.csv", chunksize=200000)
 df=df1.get_chunk()
@@ -17,6 +19,8 @@ df = df.drop('time', 1)
 trans = {}
 visited = {}
 counts = {}
+pairS ={}
+pairT ={}
 for index,row in df.iterrows():
     visited[row['source']] = False
     if row['source'] not in trans:
@@ -24,22 +28,36 @@ for index,row in df.iterrows():
     if row['target'] not in trans[row['source']]:
         trans[row['source']][row['target']] = []
 
+    if row['source'] not in pairS.keys():
+        pairS[row['source']] = []
+    if row['target'] not in pairT.keys():
+        pairT[row['target']] = []
+
+
     if row['source'] not in counts:
         counts[row['source']] = [0,0]
+        pairS[row['source']] = [row['target']]
     else:
-        counts[row['source']][1] += 1 # outgoing
+        if  row['target'] not in pairS[row['source']]:
+            pairS[row['source']].append(row['target'])
+            counts[row['source']][1] += 1 # outgoing
 
     if row['target'] not in counts:
         counts[row['target']] = [0,0]
+        pairT[row['target']] = [row['source']]
     else:
-        counts[row['target']][0] += 1 # incoming
+        if  row['source'] not in pairT[row['target']]:
+            pairT[row['target']].append(row['source'])
+            counts[row['target']][0] += 1 # incoming
 
     trans[row['source']][row['target']].append((row['id'],row['datetime'],row['amount'],row['currency']))
     visited[row['id']] = False
+
+
+print("Possible human trafficing frauders:")
 for c in counts.keys():
     if counts[c][1] == 1 and counts[c][0] > 10:
         print(c)
-        print("waaaaaaaaaa")
 
 print('Finished preprocess')
 def DFS(key,parent,date,amount,source,flag,depth,parent_amount):
@@ -47,7 +65,7 @@ def DFS(key,parent,date,amount,source,flag,depth,parent_amount):
     if (flag):
         flag = False
     elif key == source and parent_amount - amount < parent_amount / 5:
-        print ("LOL " + parent + " " + key + " " + str(depth))
+        #print ("LOL " + parent + " " + key + " " + str(depth))
         return True
     if not flag and depth < 8:
         if key in trans.keys():
@@ -76,19 +94,22 @@ def DFS_decreasing_diff_start_end(key,date,amount,d, t_id):
 
     # hill climbing
     if d < 10:
-        for target in list(trans[key].keys()):
-            for transaction in trans[key][target]:
-                if (type(transaction[1]) != type(date)):
-                    continue
-                if visited[transaction[0]] == False and transaction[2] > 100 and (transaction[1] - date).days < 3 and transaction[2] < (amount ): #- (double) amount*0.2
-                    print("key", key)
-                    return DFS_decreasing_diff_start_end(target,transaction[1],transaction[2],d+1, transaction[0])
-                    # d
+        if key in trans.keys():
+            for target in list(trans[key].keys()):
+                for transaction in trans[key][target]:
+                    if visited[transaction[0]] == False and transaction[2] > 10  and (transaction[2] < amount): #and #(transaction[1] - date).days < 100:
+                        # print("key: " + str(key) + " depth " + str(d))
+                        return DFS_decreasing_diff_start_end(target,transaction[1],transaction[2],d+1, transaction[0])
+                    
 
 d = 0
 #t = list(trans[key].keys())[0]
 #tt = trans[key][t][0]
 ind = 0
+for v in visited.keys():
+    visited[v] = False
+
+print("bakayim outputa")
 for key in trans:
     depth = 0
     t = list(trans[key].keys())[0]
@@ -117,4 +138,5 @@ def timepattern(trans):
                         and trans[key][target][index][2] >= 500):
                         count += 1
                 if (count + 2) > len(trans[key][target]):
-                    print(key, target)
+                    count = count + 0
+                    # print(key, target)
