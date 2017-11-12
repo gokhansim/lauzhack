@@ -1,39 +1,120 @@
 import pandas as pd
 from datetime import date, time, datetime
 
-df = pd.read_csv("transactions.small.csv")
-
+df1 = pd.read_csv("transactions.csv", chunksize=200000)
+df=df1.get_chunk()
 df['datetime'] = 0
-
+count_error  = 0
 for index,row in df.iterrows():
-    df.set_value(index,'datetime',datetime.datetime.combine(datetime.datetime.strptime(row['date'], "%m/%d/%Y").date(), datetime.datetime.strptime(row['time'], '%H:%M:%S').time()))
+    try:
+        df.set_value(index,'datetime',datetime.combine(datetime.strptime(row['date'], "%m/%d/%Y").date(), datetime.strptime(row['time'], '%H:%M:%S').time()))
+    except:
+        count_error += 1
 
 df = df.drop('date', 1)
 df = df.drop('time', 1)
 
 trans = {}
 visited = {}
+counts = {}
 for index,row in df.iterrows():
     visited[row['source']] = False
     if row['source'] not in trans:
         trans[row['source']] = {}
     if row['target'] not in trans[row['source']]:
         trans[row['source']][row['target']] = []
+
+    if row['source'] not in counts:
+        counts[row['source']] = [0,0]
+    else:
+        counts[row['source']][1] += 1 # outgoing
+
+    if row['target'] not in counts:
+        counts[row['target']] = [0,0]
+    else:
+        counts[row['target']][0] += 1 # incoming
+
     trans[row['source']][row['target']].append((row['id'],row['datetime'],row['amount'],row['currency']))
+    visited[row['id']] = False
+for c in counts.keys():
+    if counts[c][1] == 1 and counts[c][0] > 10:
+        print(c)
+        print("waaaaaaaaaa")
 
+print('Finished preprocess')
+def DFS(key,parent,date,amount,source,flag,depth,parent_amount):
 
-
-def DFS(key,parent,date,amount,source,depth,flag):
     if (flag):
         flag = False
-        print (trans[key].keys())
-    elif key == source:
-        return "LOL " + parent
-    if not flag and depth < 4:
-        for target in trans[key].keys():
-            print(target)
+    elif key == source and parent_amount - amount < parent_amount / 5:
+        print ("LOL " + parent + " " + key + " " + str(depth))
+        return True
+    if not flag and depth < 8:
+        if key in trans.keys():
+            for target in list(trans[key].keys()):
+                for transaction in trans[key][target]:
+                    if transaction[2] > 1000 and transaction[2] < amount:
+                        try:
+                            if key == source:
+                                if(DFS(target,key,transaction[1],transaction[2],source,flag,depth+1,transaction[2])):
+                                    return
+                            elif amount - transaction[2] < amount / 10 and (transaction[1] - date).days < 3:
+                                if(DFS(target,key,transaction[1],transaction[2],source,flag,depth+1,parent_amount)):
+                                    return
+                        except:
+                            global count_error
+                            count_error += 1
+for key in trans:
+    depth = 0
+    DFS(key,None,datetime.min, 999999,key,True,depth,0)
+
+#timepattern(trans)
+def DFS_decreasing_diff_start_end(key,date,amount,d, t_id):
+
+    if t_id in visited.keys():
+        visited[t_id] = True
+
+    # hill climbing
+    if d < 10:
+        for target in list(trans[key].keys()):
             for transaction in trans[key][target]:
-                if transaction[2] > 100 and transaction[1] > date and transaction[2] < amount:
-                    return DFS(target,key,transaction[1],transaction[2],source,depth+1,flag)
-        
-#print(DFS('02bd318d-57a6-4216-a9d4-e51f1f3fe17d',None,datetime.min, 999999, '02bd318d-57a6-4216-a9d4-e51f1f3fe17d',0,True))
+                if (type(transaction[1]) != type(date)):
+                    continue
+                if visited[transaction[0]] == False and transaction[2] > 100 and (transaction[1] - date).days < 3 and transaction[2] < (amount ): #- (double) amount*0.2
+                    print("key", key)
+                    return DFS_decreasing_diff_start_end(target,transaction[1],transaction[2],d+1, transaction[0])
+                    # d
+
+d = 0
+#t = list(trans[key].keys())[0]
+#tt = trans[key][t][0]
+ind = 0
+for key in trans:
+    depth = 0
+    t = list(trans[key].keys())[0]
+    tt = trans[key][t][0]
+    DFS_decreasing_diff_start_end(key,datetime.min, 999999,d, tt[0])
+
+        #DFS(key,None,datetime.min, 999999,key,True,depth,0)
+        #else:
+        #break
+
+
+# DFS_decreasing_diff_start_end(key,datetime.min, 999999,d, tt[0])
+
+for i in trans:
+    for k in trans[i]:
+       trans[i][k].sort(key=lambda tup: tup[1])
+
+
+def timepattern(trans):
+    for key in trans:
+        for target in trans[key]:
+            if len(trans[key][target]) >= 5:
+                count = 0
+                for index in range (len(trans[key][target]) - 1):
+                    if ((trans[key][target][index+1][1] - trans[key][target][index][1]).days < 30
+                        and trans[key][target][index][2] >= 500):
+                        count += 1
+                if (count + 2) > len(trans[key][target]):
+                    print(key, target)
